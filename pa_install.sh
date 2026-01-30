@@ -70,7 +70,8 @@ python << END
 import os
 import django
 from dotenv import load_dotenv
-load_dotenv() # Load env vars we just created
+# Explicitly load .env from current directory to avoid find_dotenv() error in stdin
+load_dotenv(os.path.join(os.getcwd(), '.env'))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'hexafox_project.settings')
 django.setup()
 from django.contrib.auth.models import User
