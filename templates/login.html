@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div style="min-height: 80vh; display: flex; align-items: center; justify-content: center;">
+    <div class="glass-panel"
+        style="width: 100%; max-width: 420px; padding: 2.5rem; position: relative; overflow: hidden;">
+        <!-- Decimal decorations -->
+        <div
+            style="position: absolute; top: -10px; right: 20px; font-family: 'Fira Code', monospace; color: rgba(255,255,255,0.03); font-size: 4rem; user-select: none;">
+            0x01</div>
+
+        <h2 class="text-gradient" style="margin-top: 0; font-size: 2rem; margin-bottom: 0.5rem;">Access Terminal</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 2rem;">Authenticate to access Binary Patcher</p>
+
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div style="margin-bottom: 1.5rem;">
+                <label
+                    style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">Username</label>
+                <input type="text" id="username" required
+                    style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); padding: 0.8rem; border-radius: 8px; color: white; outline: none; transition: border-color 0.3s; font-family: 'Outfit', sans-serif;">
+            </div>
+
+            <div style="margin-bottom: 2rem;">
+                <label
+                    style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">Password</label>
+                <input type="password" id="password" required
+                    style="width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); padding: 0.8rem; border-radius: 8px; color: white; outline: none; transition: border-color 0.3s; font-family: 'Outfit', sans-serif;">
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="width: 100%; justify-content: center;">
+                Initialize Session
+            </button>
+            <p id="errorMsg"
+                style="color: var(--secondary-color); margin-top: 1rem; font-size: 0.9rem; text-align: center; display: none;">
+            </p>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    async function handleLogin(e) {
+        e.preventDefault();
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const errorMsg = document.getElementById('errorMsg');
+
+        // Reset UI
+        errorMsg.style.display = 'none';
+        const btn = e.target.querySelector('button');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = 'Authenticating...';
+        btn.disabled = true;
+
+        try {
+            const response = await axios.post('/api/token/', {
+                username: username,
+                password: password
+            });
+
+            const { access, refresh } = response.data;
+            localStorage.setItem('access_token', access);
+            localStorage.setItem('refresh_token', refresh);
+
+            // Redirect to dashboard
+            window.location.href = '/app/';
+
+        } catch (error) {
+            console.error('Login failed:', error);
+            errorMsg.textContent = 'Authentication Failed: Invalid credentials';
+            errorMsg.style.display = 'block';
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+</script>
+{% endblock %}

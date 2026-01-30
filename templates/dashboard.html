@@ -1,0 +1,456 @@
+{% extends 'base.html' %}
+
+{% block extra_css %}
+<style>
+    .upload-zone {
+        border: 2px dashed rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        background: rgba(0, 0, 0, 0.2);
+    }
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
+        border-color: var(--primary-color);
+        background: rgba(124, 92, 255, 0.05);
+    }
+
+    .upload-zone h4 {
+        margin: 0 0 0.5rem 0;
+        color: var(--text-primary);
+    }
+
+    .upload-zone p {
+        margin: 0;
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+
+    .file-status {
+        margin-top: 1rem;
+        font-size: 0.85rem;
+        color: var(--primary-color);
+        display: none;
+    }
+
+    /* Hex Viewer */
+    .hex-container {
+        font-family: 'Fira Code', monospace;
+        font-size: 14px;
+        line-height: 1.5;
+        height: 600px;
+        overflow-y: auto;
+        background: #000;
+        padding: 1rem;
+        border-radius: 0 0 12px 12px;
+    }
+
+    .hex-row {
+        display: flex;
+    }
+
+    .offset {
+        color: var(--secondary-color);
+        margin-right: 1.5rem;
+        user-select: none;
+    }
+
+    .hex-data {
+        color: var(--text-secondary);
+        margin-right: 1.5rem;
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .hex-byte {
+        width: 2ch;
+        text-align: center;
+    }
+
+    .hex-byte.diff {
+        color: #f1fa8c;
+        font-weight: bold;
+        text-shadow: 0 0 5px rgba(241, 250, 140, 0.5);
+    }
+
+    .ascii-data {
+        color: var(--text-primary);
+        white-space: pre;
+        border-left: 1px solid #333;
+        padding-left: 1rem;
+    }
+
+    .panel-header {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--glass-border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    ::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: #000;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: #333;
+        border-radius: 5px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+
+    /* Magic Button Styles */
+    .magic-btn {
+        background: linear-gradient(135deg, var(--primary-color), #5c42bc);
+        color: white;
+        width: 100%;
+        padding: 1.5rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        border: none;
+        border-radius: 16px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 8px 32px rgba(124, 92, 255, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+
+    .magic-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 40px rgba(124, 92, 255, 0.5);
+    }
+
+    .magic-btn:active {
+        transform: scale(0.98);
+    }
+
+    .magic-btn::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(rgba(255, 255, 255, 0.1), transparent);
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+
+    .magic-btn:hover::before {
+        opacity: 1;
+    }
+
+    /* Comparison Animation */
+    @keyframes pulse-border {
+        0% {
+            border-color: rgba(124, 92, 255, 0.1);
+        }
+
+        50% {
+            border-color: rgba(124, 92, 255, 0.6);
+        }
+
+        100% {
+            border-color: rgba(124, 92, 255, 0.1);
+        }
+    }
+
+    .analyzing .upload-zone {
+        animation: pulse-border 1.5s infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="animate-enter">
+    <!-- Header Controls -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr 300px; gap: 1.5rem; margin-bottom: 2rem;">
+        <!-- Original File -->
+        <div class="glass-panel" style="padding: 1.5rem;" id="panelOrig">
+            <div class="upload-zone" id="dropOrig" onclick="document.getElementById('inputOrig').click()">
+                <h4>Original Binary</h4>
+                <p>Click or Drop file here</p>
+                <div id="statusOrig" class="file-status">Selected</div>
+            </div>
+            <input type="file" id="inputOrig" hidden onchange="handleFileSelect(this, 'statusOrig')">
+        </div>
+
+        <!-- Modified File -->
+        <div class="glass-panel" style="padding: 1.5rem;" id="panelMod">
+            <div class="upload-zone" id="dropMod" onclick="document.getElementById('inputMod').click()">
+                <h4>Modified Binary</h4>
+                <p>Click or Drop file here</p>
+                <div id="statusMod" class="file-status">Selected</div>
+            </div>
+            <input type="file" id="inputMod" hidden onchange="handleFileSelect(this, 'statusMod')">
+        </div>
+
+        <!-- Actions -->
+        <div class="glass-panel"
+            style="padding: 1.5rem; display: flex; flex-direction: column; justify-content: space-between; gap: 1rem;">
+            <div style="text-align: center; color: var(--text-secondary); font-size: 0.9rem; margin-bottom: auto;">
+                Comparison is performed automatically when both files are loaded.
+            </div>
+
+            <!-- Target & Patch -->
+            <div style="display: flex; flex-direction: column; gap: 0.8rem;">
+                <button class="btn btn-ghost" onclick="document.getElementById('inputTarget').click()"
+                    style="width: 100%; justify-content: center;">
+                    <span id="targetLabel">Select Target File</span>
+                </button>
+                <input type="file" id="inputTarget" hidden onchange="handleTargetSelect(this)">
+
+                <button class="magic-btn" onclick="applyPatch()" id="btnPatch"
+                    style="opacity: 0.5; pointer-events: none;">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z">
+                        </path>
+                    </svg>
+                    <span>MAGIC PATCH</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hex Viewer -->
+    <div class="glass-panel" style="overflow: hidden;">
+        <div class="panel-header">
+            <h3 style="margin: 0; font-weight: 500;">Hex Diff Viewer</h3>
+            <span id="diffCount"
+                style="font-family: 'Fira Code', monospace; color: var(--secondary-color); font-size: 0.9rem;">Waiting
+                for inputs...</span>
+        </div>
+        <div class="hex-container" id="hexView">
+            <div
+                style="display: flex; align-items: center; justify-content: center; height: 100%; color: #666; flex-direction: column; gap: 1rem;">
+                <svg width="48" height="48" style="opacity: 0.3;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                        d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                    </path>
+                </svg>
+                <span>Upload Original and Modified files to begin automatic analysis</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auth Check
+    const token = localStorage.getItem('access_token');
+    if (!token) window.location.href = '/';
+
+    let currentPatchData = null;
+
+    // File Helpers
+    function handleFileSelect(input, statusId) {
+        if (input.files.length > 0) {
+            const el = document.getElementById(statusId);
+            el.innerText = input.files[0].name;
+            el.style.display = 'block';
+
+            // Trigger Auto-Compare
+            checkAndCompare();
+        }
+    }
+
+    function handleTargetSelect(input) {
+        if (input.files.length > 0) {
+            document.getElementById('targetLabel').innerText = input.files[0].name;
+            updatePatchButton();
+        }
+    }
+
+    function checkAndCompare() {
+        const orig = document.getElementById('inputOrig').files[0];
+        const mod = document.getElementById('inputMod').files[0];
+
+        if (orig && mod) {
+            compareFiles(orig, mod);
+        }
+    }
+
+    function updatePatchButton() {
+        const hasTarget = document.getElementById('inputTarget').files.length > 0;
+        const hasPatch = currentPatchData && Object.keys(currentPatchData).length > 0;
+        const btn = document.getElementById('btnPatch');
+
+        if (hasTarget && hasPatch) {
+            btn.style.opacity = '1';
+            btn.style.pointerEvents = 'all';
+        } else {
+            btn.style.opacity = '0.5';
+            btn.style.pointerEvents = 'none';
+        }
+    }
+
+    async function compareFiles(orig, mod) {
+        const formData = new FormData();
+        formData.append('original', orig);
+        formData.append('modified', mod);
+
+        const viewer = document.getElementById('hexView');
+        const countLabel = document.getElementById('diffCount');
+
+        // Add visual loading state
+        document.getElementById('panelOrig').classList.add('analyzing');
+        document.getElementById('panelMod').classList.add('analyzing');
+        countLabel.innerText = "Analyzing...";
+        countLabel.style.color = "var(--primary-color)";
+
+        try {
+            const res = await axios.post('/app/api/compare/', formData, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            renderDiff(res.data);
+            currentPatchData = res.data.patch;
+            updatePatchButton();
+
+        } catch (err) {
+            console.error(err);
+            viewer.innerHTML = '<div style="padding:2rem; text-align:center; color:var(--secondary-color);">Error during comparison. Check console.</div>';
+            if (err.response && err.response.status === 401) window.location.href = '/';
+        } finally {
+            document.getElementById('panelOrig').classList.remove('analyzing');
+            document.getElementById('panelMod').classList.remove('analyzing');
+        }
+    }
+
+    function renderDiff(data) {
+        const viewer = document.getElementById('hexView');
+        const countLabel = document.getElementById('diffCount');
+        viewer.innerHTML = '';
+
+        countLabel.style.color = "var(--secondary-color)";
+
+        if (data.diffs.length === 0) {
+            viewer.innerHTML = '<div style="padding:2rem; text-align:center; color:#fff;">Files are identical.</div>';
+            countLabel.innerText = "0 Differences";
+            return;
+        }
+
+        countLabel.innerText = `${data.diffs.length} Blocks Differ`;
+
+        const fragment = document.createDocumentFragment();
+
+        data.diffs.forEach(row => {
+            const div = document.createElement('div');
+            div.className = 'hex-row';
+
+            // Offset
+            const offset = document.createElement('div');
+            offset.className = 'offset';
+            offset.innerText = row.offset;
+
+            // Hex
+            const hexDiv = document.createElement('div');
+            hexDiv.className = 'hex-data';
+
+            row.hex_data.forEach(byte => {
+                const bSpan = document.createElement('span');
+                bSpan.className = byte.diff ? 'hex-byte diff' : 'hex-byte';
+                bSpan.innerText = byte.b; // Showing modified version primarily
+                hexDiv.appendChild(bSpan);
+            });
+
+            // Ascii
+            const ascii = document.createElement('div');
+            ascii.className = 'ascii-data';
+            ascii.innerText = `| ${row.ascii_a} | ${row.ascii_b}`;
+
+            div.appendChild(offset);
+            div.appendChild(hexDiv);
+            div.appendChild(ascii);
+            fragment.appendChild(div);
+        });
+
+        viewer.appendChild(fragment);
+    }
+
+    async function applyPatch() {
+        const target = document.getElementById('inputTarget').files[0];
+
+        if (!target) return;
+        if (!currentPatchData) return;
+
+        const btn = document.getElementById('btnPatch');
+        btn.innerHTML = '<span>PATCHING...</span>';
+        btn.style.pointerEvents = 'none';
+
+        const formData = new FormData();
+        formData.append('target', target);
+        formData.append('patch', JSON.stringify(currentPatchData));
+
+        try {
+            const res = await axios.post('/app/api/patch/', formData, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                responseType: 'blob'
+            });
+
+            // Download file
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            const contentDisp = res.headers['content-disposition'];
+            let fileName = 'patched_file.bin';
+            if (contentDisp && contentDisp.indexOf('filename=') !== -1) {
+                let fname = contentDisp.split('filename=')[1];
+                if (fname.startsWith('"') && fname.endsWith('"')) {
+                    fname = fname.substring(1, fname.length - 1);
+                }
+                fileName = fname;
+            }
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            // Reset Button
+            btn.innerHTML = `
+                <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>SUCCESS</span>
+            `;
+            setTimeout(() => {
+                btn.innerHTML = `
+                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    <span>MAGIC PATCH</span>
+                `;
+                btn.style.pointerEvents = 'all';
+            }, 2000);
+
+        } catch (err) {
+            console.error(err);
+            alert("Error applying patch.");
+            btn.innerHTML = '<span>ERROR</span>';
+            setTimeout(() => {
+                btn.innerHTML = `
+                    <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                    <span>MAGIC PATCH</span>
+                `;
+                btn.style.pointerEvents = 'all';
+            }, 2000);
+        }
+    }
+</script>
+{% endblock %}
